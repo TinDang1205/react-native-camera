@@ -20,8 +20,6 @@ import android.media.CamcorderProfile;
 import android.view.View;
 import android.graphics.SurfaceTexture;
 
-import com.facebook.react.bridge.ReadableMap;
-
 import java.util.Set;
 import java.util.SortedSet;
 
@@ -76,24 +74,14 @@ abstract class CameraViewImpl {
 
     abstract int getFlash();
 
-    abstract void setExposureCompensation(int exposure);
-
-    abstract int getExposureCompensation();
-
-    abstract void takePicture(ReadableMap options);
+    abstract void takePicture();
 
     abstract boolean record(String path, int maxDuration, int maxFileSize,
-                            boolean recordAudio, CamcorderProfile profile, int orientation);
+                            boolean recordAudio, CamcorderProfile profile);
 
     abstract void stopRecording();
 
-    abstract int getCameraOrientation();
-
     abstract void setDisplayOrientation(int displayOrientation);
-
-    abstract void setDeviceOrientation(int deviceOrientation);
-    
-    abstract void setFocusArea(float x, float y);
 
     abstract void setFocusDepth(float value);
 
@@ -125,9 +113,9 @@ abstract class CameraViewImpl {
 
         void onCameraClosed();
 
-        void onPictureTaken(byte[] data, int deviceOrientation);
+        void onPictureTaken(byte[] data);
 
-        void onVideoRecorded(String path, int videoOrientation, int deviceOrientation);
+        void onVideoRecorded(String path);
 
         void onFramePreview(byte[] data, int width, int height, int orientation);
 

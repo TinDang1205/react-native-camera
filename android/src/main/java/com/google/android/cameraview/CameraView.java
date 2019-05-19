@@ -18,8 +18,6 @@ package com.google.android.cameraview;
 
 import android.app.Activity;
 import android.content.Context;
-import android.graphics.Rect;
-import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.os.Build;
 import android.os.Parcel;
@@ -31,12 +29,9 @@ import android.support.v4.os.ParcelableCompat;
 import android.support.v4.os.ParcelableCompatCreatorCallbacks;
 import android.support.v4.view.ViewCompat;
 import android.util.AttributeSet;
-import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.graphics.SurfaceTexture;
-
-import com.facebook.react.bridge.ReadableMap;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -122,9 +117,8 @@ public class CameraView extends FrameLayout {
         // Display orientation detector
         mDisplayOrientationDetector = new DisplayOrientationDetector(context) {
             @Override
-            public void onDisplayOrientationChanged(int displayOrientation, int deviceOrientation) {
+            public void onDisplayOrientationChanged(int displayOrientation) {
                 mImpl.setDisplayOrientation(displayOrientation);
-                mImpl.setDeviceOrientation(deviceOrientation);
             }
         };
     }
@@ -223,7 +217,6 @@ public class CameraView extends FrameLayout {
         state.ratio = getAspectRatio();
         state.autoFocus = getAutoFocus();
         state.flash = getFlash();
-        state.exposure = getExposureCompensation();
         state.focusDepth = getFocusDepth();
         state.zoom = getZoom();
         state.whiteBalance = getWhiteBalance();
@@ -244,7 +237,6 @@ public class CameraView extends FrameLayout {
         setAspectRatio(ss.ratio);
         setAutoFocus(ss.autoFocus);
         setFlash(ss.flash);
-        setExposureCompensation(ss.exposure);
         setFocusDepth(ss.focusDepth);
         setZoom(ss.zoom);
         setWhiteBalance(ss.whiteBalance);
@@ -279,7 +271,10 @@ public class CameraView extends FrameLayout {
             }
             mImpl = new Camera1(mCallbacks, mImpl.mPreview);
         }
-        start();
+        onRestoreInstanceState(state);
+        if (wasOpened) {
+            start();
+        }
     }
 
     /**
@@ -478,34 +473,6 @@ public class CameraView extends FrameLayout {
         return mImpl.getFlash();
     }
 
-    public void setExposureCompensation(int exposure) {
-        mImpl.setExposureCompensation(exposure);
-    }
-
-    public int getExposureCompensation() {
-        return mImpl.getExposureCompensation();
-    }
-
-
-    /**
-     * Gets the camera orientation relative to the devices native orientation.
-     *
-     * @return The orientation of the camera.
-     */
-    public int getCameraOrientation() {
-        return mImpl.getCameraOrientation();
-    }
-    
-    /**
-     * Sets the auto focus point.
-     *
-     * @param x sets the x coordinate for camera auto focus
-     * @param y sets the y coordinate for camera auto focus
-     */
-    public void setAutoFocusPointOfInterest(float x, float y) {
-        mImpl.setFocusArea(x, y);
-    }
-
     public void setFocusDepth(float value) {
         mImpl.setFocusDepth(value);
     }
@@ -534,23 +501,23 @@ public class CameraView extends FrameLayout {
 
     /**
      * Take a picture. The result will be returned to
-     * {@link Callback#onPictureTaken(CameraView, byte[], int)}.
+     * {@link Callback#onPictureTaken(CameraView, byte[])}.
      */
-    public void takePicture(ReadableMap options) {
-        mImpl.takePicture(options);
+    public void takePicture() {
+        mImpl.takePicture();
     }
 
     /**
      * Record a video and save it to file. The result will be returned to
-     * {@link Callback#onVideoRecorded(CameraView, String, int, int)}.
+     * {@link Callback#onVideoRecorded(CameraView, String)}.
      * @param path Path to file that video will be saved to.
      * @param maxDuration Maximum duration of the recording, in seconds.
      * @param maxFileSize Maximum recording file size, in bytes.
      * @param profile Quality profile of the recording.
      */
     public boolean record(String path, int maxDuration, int maxFileSize,
-                          boolean recordAudio, CamcorderProfile profile, int orientation) {
-        return mImpl.record(path, maxDuration, maxFileSize, recordAudio, profile, orientation);
+                          boolean recordAudio, CamcorderProfile profile) {
+        return mImpl.record(path, maxDuration, maxFileSize, recordAudio, profile);
     }
 
     public void stopRecording() {
@@ -609,16 +576,16 @@ public class CameraView extends FrameLayout {
         }
 
         @Override
-        public void onPictureTaken(byte[] data, int deviceOrientation) {
+        public void onPictureTaken(byte[] data) {
             for (Callback callback : mCallbacks) {
-                callback.onPictureTaken(CameraView.this, data, deviceOrientation);
+                callback.onPictureTaken(CameraView.this, data);
             }
         }
 
         @Override
-        public void onVideoRecorded(String path, int videoOrientation, int deviceOrientation) {
+        public void onVideoRecorded(String path) {
             for (Callback callback : mCallbacks) {
-                callback.onVideoRecorded(CameraView.this, path, videoOrientation, deviceOrientation);
+                callback.onVideoRecorded(CameraView.this, path);
             }
         }
 
@@ -653,8 +620,6 @@ public class CameraView extends FrameLayout {
         @Flash
         int flash;
 
-        int exposure;
-
         float focusDepth;
 
         float zoom;
@@ -672,7 +637,6 @@ public class CameraView extends FrameLayout {
             ratio = source.readParcelable(loader);
             autoFocus = source.readByte() != 0;
             flash = source.readInt();
-            exposure = source.readInt();
             focusDepth = source.readFloat();
             zoom = source.readFloat();
             whiteBalance = source.readInt();
@@ -691,7 +655,6 @@ public class CameraView extends FrameLayout {
             out.writeParcelable(ratio, 0);
             out.writeByte((byte) (autoFocus ? 1 : 0));
             out.writeInt(flash);
-            out.writeInt(exposure);
             out.writeFloat(focusDepth);
             out.writeFloat(zoom);
             out.writeInt(whiteBalance);
@@ -744,7 +707,7 @@ public class CameraView extends FrameLayout {
          * @param cameraView The associated {@link CameraView}.
          * @param data       JPEG data.
          */
-        public void onPictureTaken(CameraView cameraView, byte[] data, int deviceOrientation) {
+        public void onPictureTaken(CameraView cameraView, byte[] data) {
         }
 
         /**
@@ -753,7 +716,7 @@ public class CameraView extends FrameLayout {
          * @param cameraView The associated {@link CameraView}.
          * @param path       Path to recoredd video file.
          */
-        public void onVideoRecorded(CameraView cameraView, String path, int videoOrientation, int deviceOrientation) {
+        public void onVideoRecorded(CameraView cameraView, String path) {
         }
 
         public void onFramePreview(CameraView cameraView, byte[] data, int width, int height, int orientation) {

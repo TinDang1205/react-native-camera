@@ -2,14 +2,15 @@
 
 To integrate react-native-camera into your own react native project and make it work for Android, you need to edit the following files in the `android` folder under your project folder:
 
-- In the `android/gradle.properties` file:
+* In the `android/gradle.properties` file: 
 
 ```
 android.useDeprecatedNdk=true
 android.enableAapt2=false
 ```
 
-- In the `android/build.gradle` file:
+
+* In the `android/build.gradle` file:
 
 ```
 buildscript {
@@ -53,19 +54,19 @@ subprojects {
             }
         }
     }
-
-    afterEvaluate {
-        project -> if (project.hasProperty("android")) {
-            android {
-                compileSdkVersion 26
-                buildToolsVersion '26.0.1'
-            }
-        }
-    }
+    
+    afterEvaluate { 
+        project -> if (project.hasProperty("android")) { 
+            android { 
+                compileSdkVersion 26 
+                buildToolsVersion '26.0.1' 
+            } 
+        } 
+    } 
 }
 ```
 
-- In the `android/app/build.gradle` file:
+* In the `android/app/build.gradle` file:
 
 ```
 android {
@@ -94,7 +95,7 @@ dependencies {
 }
 ```
 
-- In the `android/gradle/gradle-wrapper.properties` file:
+* In the `android/gradle/gradle-wrapper.properties` file:
 
 ```
 distributionBase=GRADLE_USER_HOME

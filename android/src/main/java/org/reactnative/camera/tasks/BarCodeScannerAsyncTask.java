@@ -38,44 +38,14 @@ public class BarCodeScannerAsyncTask extends android.os.AsyncTask<Void, Void, Re
     Result result = null;
 
     try {
-      BinaryBitmap bitmap = generateBitmapFromImageData(
-              mImageData,
-              mWidth,
-              mHeight,
-              false
-      );
+      BinaryBitmap bitmap = generateBitmapFromImageData(mImageData, mWidth, mHeight);
       result = mMultiFormatReader.decodeWithState(bitmap);
     } catch (NotFoundException e) {
-      BinaryBitmap bitmap = generateBitmapFromImageData(
-              rotateImage(mImageData,mWidth, mHeight),
-              mHeight,
-              mWidth,
-              false
-      );
+      BinaryBitmap bitmap = generateBitmapFromImageData(rotateImage(mImageData,mWidth, mHeight),mHeight,mWidth);
       try {
         result = mMultiFormatReader.decodeWithState(bitmap);
       } catch (NotFoundException e1) {
-          BinaryBitmap invertedBitmap = generateBitmapFromImageData(
-                  mImageData,
-                  mWidth,
-                  mHeight,
-                  true
-          );
-        try {
-          result = mMultiFormatReader.decodeWithState(invertedBitmap);
-        } catch (NotFoundException e2) {
-          BinaryBitmap invertedRotatedBitmap = generateBitmapFromImageData(
-                  rotateImage(mImageData,mWidth, mHeight),
-                  mHeight,
-                  mWidth,
-                  true
-          );
-          try {
-            result = mMultiFormatReader.decodeWithState(invertedRotatedBitmap);
-          } catch (NotFoundException e3) {
-            //no barcode Found
-          }
-        }
+        //no barcode Found
       }
     } catch (Throwable t) {
       t.printStackTrace();
@@ -96,12 +66,12 @@ public class BarCodeScannerAsyncTask extends android.os.AsyncTask<Void, Void, Re
   protected void onPostExecute(Result result) {
     super.onPostExecute(result);
     if (result != null) {
-      mDelegate.onBarCodeRead(result, mWidth, mHeight);
+      mDelegate.onBarCodeRead(result);
     }
     mDelegate.onBarCodeScanningTaskCompleted();
   }
 
-  private BinaryBitmap generateBitmapFromImageData(byte[] imageData, int width, int height, boolean inverse) {
+  private BinaryBitmap generateBitmapFromImageData(byte[] imageData, int width, int height) {
     PlanarYUVLuminanceSource source = new PlanarYUVLuminanceSource(
         imageData, // byte[] yuvData
         width, // int dataWidth
@@ -112,10 +82,6 @@ public class BarCodeScannerAsyncTask extends android.os.AsyncTask<Void, Void, Re
         height, // int height
         false // boolean reverseHorizontal
     );
-    if (inverse) {
-      return new BinaryBitmap(new HybridBinarizer(source.invert()));
-    } else {
-      return new BinaryBitmap(new HybridBinarizer(source));
-    }
+    return new BinaryBitmap(new HybridBinarizer(source));
   }
 }

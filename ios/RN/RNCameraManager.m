@@ -16,9 +16,7 @@ RCT_EXPORT_VIEW_PROPERTY(onCameraReady, RCTDirectEventBlock);
 RCT_EXPORT_VIEW_PROPERTY(onMountError, RCTDirectEventBlock);
 RCT_EXPORT_VIEW_PROPERTY(onBarCodeRead, RCTDirectEventBlock);
 RCT_EXPORT_VIEW_PROPERTY(onFacesDetected, RCTDirectEventBlock);
-RCT_EXPORT_VIEW_PROPERTY(onGoogleVisionBarcodesDetected, RCTDirectEventBlock);
 RCT_EXPORT_VIEW_PROPERTY(onPictureSaved, RCTDirectEventBlock);
-RCT_EXPORT_VIEW_PROPERTY(onTextRecognized, RCTDirectEventBlock);
 
 + (BOOL)requiresMainQueueSetup
 {
@@ -69,16 +67,13 @@ RCT_EXPORT_VIEW_PROPERTY(onTextRecognized, RCTDirectEventBlock);
              @"VideoCodec": [[self class] validCodecTypes],
              @"BarCodeType" : [[self class] validBarCodeTypes],
              @"FaceDetection" : [[self class] faceDetectorConstants],
-             @"VideoStabilization": [[self class] validVideoStabilizationModes],
-             @"GoogleVisionBarcodeDetection": @{
-                 @"BarcodeType": [[self class] barcodeDetectorConstants],
-             }
+             @"VideoStabilization": [[self class] validVideoStabilizationModes]
              };
 }
 
 - (NSArray<NSString *> *)supportedEvents
 {
-    return @[@"onCameraReady", @"onMountError", @"onBarCodeRead", @"onFacesDetected", @"onPictureSaved", @"onTextRecognized", @"onGoogleVisionBarcodesDetected"];
+    return @[@"onCameraReady", @"onMountError", @"onBarCodeRead", @"onFacesDetected", @"onPictureSaved"];
 }
 
 + (NSDictionary *)validCodecTypes
@@ -146,17 +141,12 @@ RCT_EXPORT_VIEW_PROPERTY(onTextRecognized, RCTDirectEventBlock);
 
 + (NSDictionary *)faceDetectorConstants
 {
-#if __has_include(<FirebaseMLVision/FirebaseMLVision.h>)
-    return [FaceDetectorManagerMlkit constants];
+#if __has_include(<GoogleMobileVision/GoogleMobileVision.h>)
+#if __has_include("RNFaceDetectorManager.h")
+    return [RNFaceDetectorManager constants];
 #else
-    return [NSDictionary new];
+    return [RNFaceDetectorManagerStub constants];
 #endif
-}
-
-+ (NSDictionary *)barcodeDetectorConstants
-{
-#if __has_include(<FirebaseMLVision/FirebaseMLVision.h>)
-    return [BarcodeDetectorManagerMlkit constants];
 #else
     return [NSDictionary new];
 #endif
@@ -180,12 +170,6 @@ RCT_CUSTOM_VIEW_PROPERTY(autoFocus, NSInteger, RNCamera)
 {
     [view setAutoFocus:[RCTConvert NSInteger:json]];
     [view updateFocusMode];
-}
-
-RCT_CUSTOM_VIEW_PROPERTY(autoFocusPointOfInterest, NSDictionary, RNCamera)
-{
-    [view setAutoFocusPointOfInterest:[RCTConvert NSDictionary:json]];
-    [view updateAutoFocusPointOfInterest];
 }
 
 RCT_CUSTOM_VIEW_PROPERTY(focusDepth, NSNumber, RNCamera)
@@ -215,13 +199,8 @@ RCT_CUSTOM_VIEW_PROPERTY(pictureSize, NSString *, RNCamera)
 
 RCT_CUSTOM_VIEW_PROPERTY(faceDetectorEnabled, BOOL, RNCamera)
 {
-    view.canDetectFaces = [RCTConvert BOOL:json];
-    [view setupOrDisableFaceDetector];
-}
-
-RCT_CUSTOM_VIEW_PROPERTY(trackingEnabled, BOOL, RNCamera)
-{
-    [view updateTrackingEnabled:json];
+    view.isDetectingFaces = [RCTConvert BOOL:json];
+    [view updateFaceDetecting:json];
 }
 
 RCT_CUSTOM_VIEW_PROPERTY(faceDetectionMode, NSInteger, RNCamera)
@@ -251,29 +230,6 @@ RCT_CUSTOM_VIEW_PROPERTY(barCodeTypes, NSArray, RNCamera)
     [view setBarCodeTypes:[RCTConvert NSArray:json]];
 }
 
-RCT_CUSTOM_VIEW_PROPERTY(googleVisionBarcodeType, NSString, RNCamera)
-{
-    [view updateGoogleVisionBarcodeType:json];
-}
-
-RCT_CUSTOM_VIEW_PROPERTY(googleVisionBarcodeDetectorEnabled, BOOL, RNCamera)
-{
-    view.canDetectBarcodes = [RCTConvert BOOL:json];
-    [view setupOrDisableBarcodeDetector];
-}
-
-RCT_CUSTOM_VIEW_PROPERTY(textRecognizerEnabled, BOOL, RNCamera)
-{
-    
-    view.canReadText = [RCTConvert BOOL:json];
-    [view setupOrDisableTextDetector];
-}
-
-RCT_CUSTOM_VIEW_PROPERTY(defaultVideoQuality, NSInteger, RNCamera)
-{
-    [view setDefaultVideoQuality: [NSNumber numberWithInteger:[RCTConvert NSInteger:json]]];
-}
-
 RCT_REMAP_METHOD(takePicture,
                  options:(NSDictionary *)options
                  reactTag:(nonnull NSNumber *)reactTag
@@ -295,9 +251,7 @@ RCT_REMAP_METHOD(takePicture,
                 resolve(nil);
             }
             NSData *photoData = UIImageJPEGRepresentation(generatedPhoto, quality);
-            if (![options[@"doNotSave"] boolValue]) {
-                response[@"uri"] = [RNImageUtils writeImage:photoData toPath:path];
-            }
+            response[@"uri"] = [RNImageUtils writeImage:photoData toPath:path];
             response[@"width"] = @(generatedPhoto.size.width);
             response[@"height"] = @(generatedPhoto.size.height);
             if ([options[@"base64"] boolValue]) {
@@ -396,34 +350,11 @@ RCT_EXPORT_METHOD(checkDeviceAuthorizationStatus:(RCTPromiseResolveBlock)resolve
 
 RCT_EXPORT_METHOD(checkVideoAuthorizationStatus:(RCTPromiseResolveBlock)resolve
                   reject:(__unused RCTPromiseRejectBlock)reject) {
-#ifdef DEBUG
-    if ([[NSBundle mainBundle].infoDictionary objectForKey:@"NSCameraUsageDescription"] == nil) {
-        RCTLogWarn(@"Checking video permissions without having key 'NSCameraUsageDescription' defined in your Info.plist. If you do not add it your app will crash when being built in release mode. You will have to add it to your Info.plist file, otherwise RNCamera is not allowed to use the camera.  You can learn more about adding permissions here: https://stackoverflow.com/a/38498347/4202031");
-        resolve(@(NO));
-        return;
-    }
-#endif
     __block NSString *mediaType = AVMediaTypeVideo;
+    
     [AVCaptureDevice requestAccessForMediaType:mediaType completionHandler:^(BOOL granted) {
         resolve(@(granted));
     }];
-}
-
-RCT_EXPORT_METHOD(checkRecordAudioAuthorizationStatus:(RCTPromiseResolveBlock)resolve
-                  reject:(__unused RCTPromiseRejectBlock)reject) {
-    if ([[NSBundle mainBundle].infoDictionary objectForKey:@"NSMicrophoneUsageDescription"] == nil) {
-        RCTLogWarn(@"Checking audio permissions without having key 'NSMicrophoneUsageDescription' defined in your Info.plist. Audio Recording for your video files is therefore disabled. If you do not need audio on your recordings is is recommended to set the 'captureAudio' property on your component instance to 'false', otherwise you will have to add the key 'NSMicrophoneUsageDescription' to your Info.plist. If you do not your app will crash when being built in release mode. You can learn more about adding permissions here: https://stackoverflow.com/a/38498347/4202031");
-        resolve(@(NO));
-        return;
-    } else {
-#ifdef DEBUG
-        [[AVAudioSession sharedInstance] requestRecordPermission:^(BOOL granted) {
-            resolve(@(granted));
-        }];
-#else
-        resolve(@(YES));
-#endif
-    }
 }
 
 RCT_REMAP_METHOD(getAvailablePictureSizes,
@@ -435,21 +366,5 @@ RCT_REMAP_METHOD(getAvailablePictureSizes,
     resolve([[[self class] pictureSizes] allKeys]);
 }
 
-RCT_EXPORT_METHOD(isRecording:(nonnull NSNumber *)reactTag
-                 resolver:(RCTPromiseResolveBlock)resolve
-                 rejecter:(RCTPromiseRejectBlock)reject) {
-    #if TARGET_IPHONE_SIMULATOR
-        reject(@"E_IS_RECORDING_FAILED", @"Video recording is not supported on a simulator.", nil);
-        return;
-    #endif
-        [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager, NSDictionary<NSNumber *, RNCamera *> *viewRegistry) {
-            RNCamera *view = viewRegistry[reactTag];
-            if (![view isKindOfClass:[RNCamera class]]) {
-                RCTLogError(@"Invalid view returned from registry, expecting RNCamera, got: %@", view);
-            } else {
-                resolve(@([view isRecording]));
-            }
-        }];
-}
-
 @end
+
